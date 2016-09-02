@@ -1,3 +1,4 @@
+from __future__ import print_function
 from rdkit import RDConfig
 import os, sys
 from rdkit import DataStructs, Chem
@@ -74,27 +75,32 @@ def check(ctab,f=None):
         return False
     mol.UpdatePropertyCache(False)
     
-    #print Chem.MolToSmiles(mol, isomericSmiles=False)
     err2 = checker.CheckMolStructure(mol)
 
     labels = [l.lower() for l in checker.StructureFlagsToString(err2).split(",") if l]
 
 
     if sorted(labels) == sorted(label(err)):
-        print >> sys.stderr, "...ok"
+        print("...ok", file=sys.stderr)
         return True
 
 
-    print >> sys.stderr, "...Failed" , "expected:", sorted(label(err)), "got:", sorted(labels)
+    print("...Failed" , "expected:", sorted(label(err)), "got:", sorted(labels),
+          file=sys.stderr)
 
-    expected = repr(sorted(label(err)))
-    got = repr(labels)
+    expected = set(sorted(label(err)))
+    got = set(labels)
+    extra = ["-"+x for x in expected.difference(got)]
+    extra.extend(["+"+x for x in got.difference(expected)])
+    print(" delta: ",extra)
+
     ctab += "> <EXPECTED>\n%s\n\n> <GOT>\n%s\n\n$$$$\n"%(expected, got)
-
-    oname = f
+    err = extra#expected.difference(got)
+    
+    oname = f.replace(".sdf", "-%06d.sdf"%i)
     if err:
-        err = "-".join(sorted(label(err)))
-        print >> sys.stderr, err
+        err = ".".join(sorted(err))
+        print(err, file=sys.stderr)
         path = os.path.join("failures", err)
         if not os.path.exists(path):
             os.mkdir(path)
@@ -108,11 +114,11 @@ def check(ctab,f=None):
         open(fn, 'w').write(ctab)
 
 def molcheck(fname):
-    print "Examining file", fname
+    print ("Examining file", fname)
     text = open(fname).read()
     f = os.path.split(fname)[-1]
     mols = text.split("$$$$\n")
-    print "number of molecules", len(mols)
+    print("number of molecules", len(mols))
     del text
     for i,ctab in enumerate(mols):
         check(ctab,f.replace(".", "-%06d."%i))
@@ -140,10 +146,10 @@ try:
         for root, dirs, files in os.walk("substance"):
             for f in files:
                 if ".sdf" in f:
-                    print "Examining file", f
+                    print ("Examining file", f)
                     text = open(os.path.join(root, f)).read()
                     mols = text.split("$$$$\n")
-                    print "number of molecules", len(mols)
+                    print ("number of molecules", len(mols))
                     del text
                     for i,ctab in enumerate(mols):
                         check(ctab,f.replace(".", "-%06d."%i))
