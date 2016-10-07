@@ -13,6 +13,7 @@ struchk_conf_path = os.path.join(RDConfig.RDDataDir, 'struchk', '')
 struchk_log_path = ''
 STRUCHK_INIT = '''-tm
 -tm
+-ta %(struchk_conf_path)scheckfgs.trn
 -or
 -ca %(struchk_conf_path)scheckfgs.chk
 -cc
@@ -23,6 +24,7 @@ STRUCHK_INIT = '''-tm
 
 opts = rdStructChecker.StructCheckerOptions()
 opts.LoadGoodAugmentedAtoms("%(struchk_conf_path)scheckfgs.chk"%locals())
+opts.LoadAugmentedAtomTranslations("%(struchk_conf_path)scheckfgs.trn"%locals())
 
 opts.RemoveMinorFragments = True
 # -or => opts.?
@@ -63,8 +65,9 @@ M  END
 
 i = 0
 def check(ctab,f=None):
-    (err, fixed_mol) = pyAvalonTools.CheckMoleculeString(ctab, False)
     mol = Chem.MolFromMolBlock(ctab, sanitize=False)
+    (err, fixed_mol) = pyAvalonTools.CheckMoleculeString(ctab, False)
+
     ops = (Chem.SanitizeFlags.SANITIZE_ALL^Chem.SanitizeFlags.SANITIZE_SETAROMATICITY^
            Chem.SanitizeFlags.SANITIZE_CLEANUPCHIRALITY)
     try:
@@ -84,12 +87,20 @@ def check(ctab,f=None):
         print("...ok", file=sys.stderr)
         return True
 
+    
+    expected = set(sorted(label(err)))
+    got = set(labels)
+
+    if expected.difference(got) == set(["stereo_error"]):
+        return True
+
+    if got.difference(expected) == set(["stereo_error"]):
+        return True
 
     print("...Failed" , "expected:", sorted(label(err)), "got:", sorted(labels),
           file=sys.stderr)
 
-    expected = set(sorted(label(err)))
-    got = set(labels)
+    
     extra = ["-"+x for x in expected.difference(got)]
     extra.extend(["+"+x for x in got.difference(expected)])
     print(" delta: ",extra)
@@ -112,7 +123,7 @@ def check(ctab,f=None):
 
         fn = os.path.join("ok", oname)
         open(fn, 'w').write(ctab)
-
+    
 def molcheck(fname):
     print ("Examining file", fname)
     text = open(fname).read()
@@ -121,7 +132,8 @@ def molcheck(fname):
     print("number of molecules", len(mols))
     del text
     for i,ctab in enumerate(mols):
-        check(ctab,f.replace(".", "-%06d."%i))
+        if ctab:
+            check(ctab,f.replace(".", "-%06d."%i))
 
 try:
     #check(open("bad-nitro.mol").read(), "bad-nitro-err.mol")
@@ -137,6 +149,8 @@ try:
     #molcheck("atom-clash3.mol")
     #molcheck("parity.mol")
     #molcheck("dubious.sdf")
+    #molcheck("nitro.sdf")
+
     if len(sys.argv) > 1:
         files = sys.argv[1:]
         for f in files:
